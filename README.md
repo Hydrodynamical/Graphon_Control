@@ -91,9 +91,9 @@ Three helper functions implement the penalty terms:
 
 | Function | Returns |
 | --- | --- |
-| `graphon_l2_penalty(W)` | `mean(W²)` — grid-average approximation of `‖W‖²_{L²(I²)}` |
+| `graphon_l2_penalty(W)` | `sum(W²)` — discrete approximation of `‖W‖²_{L²(I²)}` (`sum` not `mean`, because `w_ij ~ N·W_ij`) |
 | `uniform_graphon_target(N, device, dtype)` | The discrete uniform target `U`: `U_ij = 1/(N−1)` for `i ≠ j`, `U_ii = 0` |
-| `graphon_uniform_penalty(W)` | `mean((W − U)²)` — grid-average approximation of `‖W − U‖²_{L²(I²)}` |
+| `graphon_uniform_penalty(W)` | `sum((W − U)²)` — discrete approximation of `‖W − U‖²_{L²(I²)}` (same scaling rationale) |
 
 **Why `1/(N−1)` and not all-ones?** The architecture enforces `W_ii = 0` and row sums of 1, so each row distributes its full weight over the `N−1` off-diagonal entries. The uniform distribution over those entries is `1/(N−1)`, not `1/N`. Using the all-ones matrix as a target would be inconsistent with the row-stochastic constraint.
 
