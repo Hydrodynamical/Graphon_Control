@@ -111,44 +111,6 @@ def imshow_graphon(
     return ax
 
 
-def contour_graphon(
-    W,
-    levels=12,
-    title="",
-    ax=None,
-    show=True,
-    cmap="viridis",
-    colorbar=True,
-):
-    """
-    Contour plot of graphon W.
-    """
-    Wnp = _as_numpy(W)
-    N = Wnp.shape[0]
-
-    zeta = (np.arange(N) + 0.5) / N
-    xi = (np.arange(N) + 0.5) / N
-    ZZ, XX = np.meshgrid(zeta, xi)
-
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(6.5, 5.5))
-
-    cs = ax.contourf(ZZ, XX, Wnp, levels=levels, cmap=cmap)
-    ax.set_title(title if title else r"Graphon contour plot")
-    ax.set_xlabel(r"$\zeta$")
-    ax.set_ylabel(r"$\xi$")
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-
-    if colorbar:
-        plt.colorbar(cs, ax=ax, fraction=0.046, pad=0.04)
-
-    if show:
-        plt.tight_layout()
-        plt.show()
-
-    return ax
-
 
 def plot_slices_over_zeta(
     W,
@@ -372,6 +334,7 @@ def plot_state_histogram_over_time_imshow(
     density=True,
     cmap="viridis",
     title="Empirical state histogram over time",
+    x_target=None,
     show=True,
 ):
     X = torch.stack(xs, dim=0).detach().cpu().numpy()   # (Tsteps, B, N)
@@ -408,7 +371,129 @@ def plot_state_histogram_over_time_imshow(
     ax.set_title(title)
     plt.colorbar(im, ax=ax, label="density" if density else "count")
 
+    # Overlay: mean state trajectory
+    t_axis = np.linspace(0.0, dt * (Tsteps - 1), Tsteps)
+    mean_vals = X.reshape(Tsteps, -1).mean(axis=1)
+    ax.plot(mean_vals, t_axis, color="white", lw=1.5, label=r"$\bar{x}(t)$")
+
+    # Overlay: target state
+    if x_target is not None:
+        ax.axvline(x_target, color="white", lw=1.0, ls="--",
+                   label=rf"$x^* = {x_target}$")
+
+    ax.legend(loc="upper right", fontsize=8, framealpha=0.4)
+
     if show:
         plt.show()
 
     return H, x_edges, ax
+
+
+def plot_x0_samples(xi, x0_batch, n_show=12, title="Sample initial-condition profiles"):
+    """
+    Line plot of n_show samples from x0_batch (B, N) vs xi (N,).
+    Returns fig, ax.
+    """
+    fig, ax = plt.subplots(figsize=(10, 4))
+    for i in range(min(n_show, x0_batch.shape[0])):
+        ax.plot(xi.cpu().numpy(), x0_batch[i].detach().cpu().numpy(), lw=0.8)
+    ax.set_xlabel(r"$\xi$")
+    ax.set_ylabel(r"$x_0(\xi)$")
+    ax.set_title(title)
+    fig.tight_layout()
+    return fig, ax
+
+
+def plot_x0_density(xi, x0_batch, gridsize=40, title="Initial-state density across labels and batch"):
+    """
+    Hexbin density of (xi, x0) pooled over all batch samples.
+    x0_batch shape: (B, N). xi shape: (N,).
+    Returns fig, ax.
+    """
+    xi_np = xi.cpu().numpy()
+    x0_np = x0_batch.detach().cpu().numpy()
+    B, N = x0_np.shape
+    xi_rep = np.tile(xi_np, B)
+    x0_rep = x0_np.reshape(-1)
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+    hb = ax.hexbin(xi_rep, x0_rep, gridsize=gridsize, cmap="Blues", mincnt=1, linewidths=0.2)
+    fig.colorbar(hb, ax=ax, label="count")
+    ax.set_xlabel(r"$\xi$")
+    ax.set_ylabel(r"$x_0$")
+    ax.set_title(title)
+    fig.tight_layout()
+    return fig, ax
+
+
+def plot_phi(phi_fn, z_range=(-20.0, 20.0), n_points=400, title=None):
+    """
+    Plot phi_fn(z) vs z over z_range. Returns fig, ax.
+    """
+    import torch as _torch
+    zz = np.linspace(z_range[0], z_range[1], n_points)
+    z_t = _torch.tensor(zz, dtype=_torch.float32)
+    with _torch.no_grad():
+        yy = phi_fn(z_t).numpy()
+    fig, ax = plt.subplots(figsize=(5, 4))
+    ax.plot(zz, yy, lw=1.5)
+    ax.axhline(0, color="k", lw=0.5, ls="--")
+    ax.axvline(0, color="k", lw=0.5, ls="--")
+    ax.set_xlabel(r"$z$")
+    ax.set_ylabel(r"$\phi(z)$")
+    ax.set_title(title or r"Interaction kernel $\phi(z)$")
+    fig.tight_layout()
+    return fig, ax
+
+
+def save_graphon_gif(frames, path, fps=10, cmap="viridis", percentile_clip=0.01,
+                     t_vals=None, figsize=(5, 4), dpi=80):
+    """
+    frames : list of (N, N) tensors, one per time point.
+    t_vals : optional list of floats (same length as frames) used for per-frame title.
+    Renders each frame as a proper matplotlib figure (axes, colorbar, labels)
+    and saves as an animated GIF via Pillow.
+    """
+    from PIL import Image
+    from io import BytesIO
+
+    # Global color scale computed once for visual consistency across frames
+    all_vals = np.concatenate([_as_numpy(f).ravel() for f in frames])
+    q = (percentile_clip * 100) if percentile_clip else 0.0
+    vmin = float(np.percentile(all_vals, q))
+    vmax = float(np.percentile(all_vals, 100.0 - q))
+
+    pil_imgs = []
+    for i, W in enumerate(frames):
+        t_str = f"$t = {t_vals[i]:.2f}$" if t_vals is not None else f"frame {i}"
+        title = r"Graphon $w(\xi,\zeta)$,  " + t_str
+
+        fig, ax = plt.subplots(figsize=figsize)
+        imshow_graphon(
+            W,
+            title=title,
+            cmap=cmap,
+            interpolation="bicubic",
+            percentile_clip=None,   # use pre-computed vmin/vmax
+            vmin=vmin,
+            vmax=vmax,
+            ax=ax,
+            show=False,
+        )
+        fig.tight_layout()
+
+        buf = BytesIO()
+        fig.savefig(buf, format="png", dpi=dpi)
+        plt.close(fig)
+        buf.seek(0)
+        pil_imgs.append(Image.open(buf).copy())
+
+    duration_ms = int(1000 / fps)
+    pil_imgs[0].save(
+        path,
+        save_all=True,
+        append_images=pil_imgs[1:],
+        loop=0,
+        duration=duration_ms,
+        optimize=False,
+    )
