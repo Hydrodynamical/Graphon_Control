@@ -1,4 +1,4 @@
-# graphon_control_algorithm1_w1.py
+# model_1.py
 
 import dataclasses
 import datetime
@@ -9,17 +9,50 @@ import os
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Union
 
+# PyTorch for modeling and training
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from model_1_viz import (
-    imshow_graphon,
-    plot_graphon_diagnostics,
-    contour_graphon,
-    heterogeneity_stats,
-    plot_state_histogram_over_time_imshow,
-)
+# import vizualization utilities from model_1_viz.py
+from tqdm import tqdm
+from model_1_viz import imshow_graphon, plot_graphon_diagnostics, heterogeneity_stats, plot_state_histogram_over_time_imshow, plot_x0_samples, plot_x0_density, plot_phi, save_graphon_gif
+
+
+# ============================================================
+# Random run-tag generator
+# ============================================================
+
+_TAG_ADJECTIVES = [
+    "amber", "arctic", "azure", "bold", "bright", "calm", "cardinal",
+    "cobalt", "coral", "crimson", "crystal", "dark", "dawn", "dense", "dim",
+    "dusty", "dusk", "ember", "faint", "firm", "flat", "fluid", "foggy",
+    "frozen", "gilded", "golden", "green", "grey", "hollow", "hushed", "icy",
+    "iron", "jade", "keen", "light", "lunar", "muted", "narrow", "noble",
+    "ochre", "pale", "quiet", "rapid", "rigid", "rough", "ruby", "russet",
+    "sandy", "scarlet", "sharp", "silent", "silver", "sleek", "slow", "solar",
+    "sparse", "stark", "stern", "still", "stone", "stormy", "subtle", "swift",
+    "tawny", "teal", "thin", "tidal", "tiny", "topaz", "turbid", "twilight",
+    "vast", "velvet", "vivid", "warm", "white", "wild", "windy", "wiry",
+]
+
+_TAG_NOUNS = [
+    "basin", "beacon", "bloom", "boulder", "brook", "canopy", "canyon",
+    "cliff", "cloud", "coast", "comet", "coral", "crater", "creek", "crest",
+    "delta", "dune", "eddy", "fern", "field", "fjord", "flare", "flint",
+    "fog", "forest", "frost", "gale", "gap", "geyser", "glacier", "glen",
+    "gorge", "grove", "gulf", "heath", "inlet", "island", "kelp", "knoll",
+    "lagoon", "larch", "ledge", "marsh", "meadow", "mesa", "moor", "moss",
+    "nebula", "peak", "pine", "plain", "pond", "pool", "prism", "ravine",
+    "reef", "ridge", "rift", "river", "rock", "shore", "slope", "spring",
+    "storm", "stream", "summit", "swamp", "tide", "timber", "torrent", "trail",
+    "vale", "valley", "veil", "void", "wave", "wisp",
+]
+
+
+def _random_run_tag() -> str:
+    import random
+    return f"{random.choice(_TAG_ADJECTIVES)}_{random.choice(_TAG_NOUNS)}"
 
 
 # ============================================================
@@ -28,17 +61,19 @@ from model_1_viz import (
 
 @dataclass
 class TrainConfig:
-    # problem size
-    N: int = 64                    # number of agents / label grid points
-    T: float = 1.0
-    dt: float = 0.02
-    sigma: float = 0.15
-    beta: float = 1e-2            # control regularization coefficient in J^{N,Δt}
-    eta_uniform: float = 0.0     # coefficient for uniform-graphon regularizer
-    regularizer_mode: str = "l2" # one of: "l2", "uniform", "l2_plus_uniform"
-    lambda_terminal: float = 1.0  # weight on terminal variance penalty
-    gamma_target: float = 0.0    # weight on terminal mean-tracking penalty
-    x_target: float = 0.0        # target for the terminal empirical mean
+    # discretization/noise parameters
+    N: int = 64                     # number of agents / label grid points
+    T: float = 1.0                  # total time horizon 
+    dt: float = 0.02                # time step for Euler-Maruyama simulation and cost discretization
+    sigma: float = 0.15             # noise scale in dynamics
+
+    # cost parameters
+    beta: float = 1e-2              # control regularization coefficient in J^{N,Δt}
+    eta_uniform: float = 0.0        # coefficient for uniform-graphon regularizer
+    regularizer_mode: str = "l2"    # one of: "l2", "uniform", "l2_plus_uniform"
+    lambda_terminal: float = 1.0    # weight on terminal variance penalty
+    gamma_target: float = 0.0       # weight on terminal mean-tracking penalty
+    x_target: float = 0.0           # target for the terminal empirical mean
 
     # graphon architecture
     enforce_symmetry: bool = False   # if True, enforce W_ij = W_ji exactly
@@ -46,7 +81,7 @@ class TrainConfig:
 
     # Monte Carlo / optimization
     batch_size: int = 32
-    num_steps: int = 3000
+    num_steps: int = 1000
     lr: float = 1e-3
     grad_clip: Optional[float] = 1.0
 
@@ -60,10 +95,6 @@ class TrainConfig:
     # reproducibility / device
     seed: int = 0
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # initial condition
-    x0_mean: float = 0.0
-    x0_std: float = 1.0
 
 
 # ============================================================
@@ -491,6 +522,23 @@ def sample_x0_linear_label(
     return base.unsqueeze(0) + noise_std * torch.randn(batch_size, xi.numel(), device=xi.device)
 
 
+def sample_x0_linear_sine(
+    batch_size: int,
+    xi: torch.Tensor,
+    amplitude: float = 7.0,
+    n_periods: float = 5.0,
+    noise_std: float = 1.0,
+) -> torch.Tensor:
+    """
+    xi: (N,)
+    Base profile: 20*(ξ - 1/2) + amplitude * sin(2π * n_periods * ξ)
+    with additive Gaussian noise. Combines a linear label-dependent slope
+    with multi-oscillation sinusoidal structure.
+    """
+    base = 20.0 * (xi - 0.5) + amplitude * torch.sin(2 * math.pi * n_periods * xi)
+    return base.unsqueeze(0) + noise_std * torch.randn(batch_size, xi.numel(), device=xi.device, dtype=xi.dtype)
+
+
 # ============================================================
 # Training loop = Algorithm 1
 # Pick sample S = (X0, ΔW), compute sampled cost, backprop, update θ
@@ -537,7 +585,8 @@ def train_algorithm1_w1(
         "terminal_target_cost": [],
     }
 
-    for step in range(config.num_steps):
+    pbar = tqdm(range(config.num_steps), desc="training", unit="step")
+    for _ in pbar:
         model.train()
         optimizer.zero_grad()
 
@@ -579,18 +628,13 @@ def train_algorithm1_w1(
         history["terminal_target_cost"].append(aux["terminal_target_cost"])
         last_aux = aux
 
-        if step % 100 == 0 or step == config.num_steps - 1:
-            print(
-                f"step={step:5d} | "
-                f"loss={aux['total_cost']:.6f} | "
-                f"state={aux['state_cost']:.6f} | "
-                f"l2_reg={aux['l2_reg_cost']:.6f} | "
-                f"unif_reg={aux['uniform_cost']:.6f} | "
-                f"term_var={aux['terminal_var']:.6f} | "
-                f"mean_T={aux['terminal_mean']:.6f} | "
-                f"target={aux['target_tracking']:.6f} | "
-                f"term_cost={aux['terminal_cost']:.6f}"
-            )
+        pbar.set_postfix(
+            loss=f"{aux['total_cost']:.4f}",
+            run=f"{aux['state_cost']:.4f}",
+            term_var=f"{aux['terminal_var']:.4f}",
+            term_mean=f"{aux['terminal_mean']:.4f}",
+            reg=f"{aux['l2_reg_cost'] + aux['uniform_cost']:.4f}",
+        )
 
     return model, history, xi, last_aux
 
@@ -709,6 +753,16 @@ def run_experiment(
     matplotlib.use("Agg")   # non-interactive backend for file saving
     import matplotlib.pyplot as plt
 
+    print("=" * 60)
+    print(f"  N={config.N}  T={config.T}  dt={config.dt}  sigma={config.sigma}")
+    print(f"  beta={config.beta}  eta_uniform={config.eta_uniform}  reg={config.regularizer_mode}")
+    print(f"  batch={config.batch_size}  steps={config.num_steps}  lr={config.lr}")
+    print(f"  lambda_terminal={config.lambda_terminal}  gamma_target={config.gamma_target}  x_target={config.x_target}")
+    print(f"  phi={getattr(phi, '__name__', repr(phi))}")
+    print(f"  x0_sampler={getattr(x0_sampler, '__name__', repr(x0_sampler))}")
+    print(f"  tag={run_tag!r}")
+    print("=" * 60)
+
     model, history, xi, final_aux = train_algorithm1_w1(config, phi=phi, x0_sampler=x0_sampler)
 
     # Representative x0 batch for statistics
@@ -804,17 +858,34 @@ def run_experiment(
     fig.savefig(os.path.join(run_dir, "graphon_mid.png"), dpi=150)
     plt.close(fig)
 
-    # Save mid-time contour plot
-    contour_graphon(W_mid, levels=16, title="Contour plot of learned graphon", show=False)
-    fig_c = plt.gcf()
-    fig_c.savefig(os.path.join(run_dir, "graphon_contour_mid.png"), dpi=150)
-    plt.close(fig_c)
-
     # Save state histogram over time
-    plot_state_histogram_over_time_imshow(xs, dt=config.dt, show=False)
+    plot_state_histogram_over_time_imshow(xs, dt=config.dt, show=False,
+                                           x_target=config.x_target)
     fig_hist = plt.gcf()
     fig_hist.savefig(os.path.join(run_dir, "state_histogram.png"), dpi=150)
     plt.close(fig_hist)
+
+    # Save IC sample-profile and density plots
+    fig_ic_s, _ = plot_x0_samples(xi_cpu, x0_sample)
+    fig_ic_s.savefig(os.path.join(run_dir, "ic_samples.png"), dpi=150)
+    plt.close(fig_ic_s)
+
+    fig_ic_d, _ = plot_x0_density(xi_cpu, x0_sample)
+    fig_ic_d.savefig(os.path.join(run_dir, "ic_density.png"), dpi=150)
+    plt.close(fig_ic_d)
+
+    # Save phi plot
+    fig_phi, _ = plot_phi(phi)
+    fig_phi.savefig(os.path.join(run_dir, "phi_plot.png"), dpi=150)
+    plt.close(fig_phi)
+
+    # Save graphon temporal GIF: sweep t from 0 to T using the final trained model
+    dtype = torch.float32
+    with torch.no_grad():
+        t_vals_tensor = torch.linspace(0.0, config.T, steps=60, device=device, dtype=dtype)
+        gif_frames = [model(t).cpu() for t in t_vals_tensor]
+    save_graphon_gif(gif_frames, os.path.join(run_dir, "graphon_time.gif"),
+                     fps=10, t_vals=t_vals_tensor.cpu().tolist())
 
     print(f"Results saved to: {run_dir}")
     return {"model": model, "history": history, "xi": xi, "xs": xs, "Ws": Ws, "run_dir": run_dir}
@@ -845,35 +916,43 @@ def evaluate_policy(
 # ============================================================
 
 if __name__ == "__main__":
+
+    # Define the training configuration for the experiment.
     cfg = TrainConfig(
-        N=64,
-        T=5.0,
-        dt=0.02,
-        sigma=0.10,
-        beta=10.0,
-        lambda_terminal=10.0,
-        gamma_target=100.0,
-        x_target=1.0,
-        batch_size=64,
-        num_steps=1000,
-        lr=1e-3,
-        num_fourier_freqs=8,
-        embed_dim=64,
-        hidden_embed=128,
-        hidden_score=128,
-        x0_mean=0.5,
-        x0_std=1.0,
-        enforce_symmetry=False,
-        eta_uniform=10.0,
-        regularizer_mode="l2",
+        # discretization / noise
+        N=32,                   # number of agents (discretization size for graphon)
+        T=10.0,                  # total time horizon
+        dt=0.02,                # time step for Euler-Maruyama simulation and cost discretization
+        sigma=0.50,             # noise scale in dynamics
+
+        # target 
+        x_target=5.0,           # target state for terminal mean-tracking cost
+
+        # cost parameters
+        lambda_terminal=1.0,   # terminal variance cost weight
+        gamma_target=100.0,     # target state cost weight
+        regularizer_mode="l2",  # regularization mode ("l2", "uniform", or "l2_plus_uniform")
+        eta_uniform=10.0,       # uniform cost weight
+        beta=10.0,              # control regularization coefficient in J^{N,Δt}
+        
+        # NN parameters
+        num_steps=500,          # training steps
+        batch_size=64,          # Monte Carlo samples per step
+        lr=1e-3,                # learning rate
+        num_fourier_freqs=8,    # number of Fourier features for label embedding
+        embed_dim=64,           # embedding dimension for graphon control architecture
+        hidden_embed=128,       # hidden dimension for embedding MLPs
+        hidden_score=128,       # hidden dimension for score MLP
+        enforce_symmetry=False, # whether to enforce W_ij = W_ji (undirected graphon) or allow asymmetry (directed graphon)
     )
 
+    # Run the experiment with the specified configuration, interaction function, and initial state sampler.
     results = run_experiment(
         config=cfg,
         phi=phi_default,
-        x0_sampler=sample_x0_linear_label,
+        x0_sampler=sample_x0_linear_sine,
         out_root="out_1",
-        run_tag="linear_label_tanh_directed_uniform10_xtarget1_time5_gamma100_lambda10",
+        run_tag=_random_run_tag(),
     )
 
     # Example of running a second experiment with a different phi and sampler:
