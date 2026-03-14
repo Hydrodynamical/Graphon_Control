@@ -39,6 +39,7 @@ Dataclass holding all hyperparameters.
 | `lambda_terminal` | Weight on terminal variance penalty |
 | `gamma_target` | Weight on terminal mean-tracking penalty |
 | `x_target` | Target value for the terminal empirical mean |
+| `target_times`, `target_values`, `target_weights` | Optional additional mean-tracking checkpoints during the rollout |
 | `enforce_symmetry` | If `True`, produce a symmetric (undirected) graphon |
 | `positive_map` | Nonnegativity map in symmetric mode: `"softplus"` or `"exp"` |
 | `batch_size`, `num_steps`, `lr` | Training hyperparameters |
@@ -79,11 +80,26 @@ J = sum_n dt * Var(x^N(s_n))                          # running state cost
   + sum_n dt * (eta_uniform/2) * ||W(s_n) - U||^2     # uniform penalty       (modes: uniform, l2_plus_uniform)
   + lambda_terminal * Var(x^N(T))                      # terminal variance
   + gamma_target * (mean(x^N(T)) - x_target)^2        # terminal mean tracking
+  + sum_k weight_k * (mean(x^N(t_k)) - target_k)^2    # optional checkpoint mean tracking
 ```
 
 `Var` and the empirical mean are computed over the `N` agents. The active penalty terms depend on `regularizer_mode` (see below).
 
-Returns a scalar loss and an `aux` dict with `total_cost`, `state_cost`, `l2_reg_cost`, `uniform_cost`, `terminal_var`, `terminal_mean`, `target_tracking`, `terminal_var_cost`, `terminal_target_cost`, `terminal_cost`.
+Returns a scalar loss and an `aux` dict with `total_cost`, `state_cost`, `l2_reg_cost`, `uniform_cost`, `scheduled_target_cost`, `terminal_var`, `terminal_mean`, `target_tracking`, `terminal_var_cost`, `terminal_target_cost`, `terminal_cost`.
+
+Additional checkpoint targets are specified by matching lists in `TrainConfig`:
+
+```python
+TrainConfig(
+  gamma_target=100.0,
+  x_target=5.0,
+  target_times=[2.5, 5.0, 7.5],
+  target_values=[-1.0, 1.5, 4.0],
+  target_weights=[25.0, 50.0, 75.0],
+)
+```
+
+If `target_weights` is omitted, the code reuses `gamma_target` for each checkpoint target.
 
 ### Graphon regularizers
 

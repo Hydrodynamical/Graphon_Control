@@ -74,6 +74,9 @@ class TrainConfig:
     lambda_terminal: float = 1.0    # weight on terminal variance penalty
     gamma_target: float = 0.0       # weight on terminal mean-tracking penalty
     x_target: float = 0.0           # target for the terminal empirical mean
+    target_times: List[float] = dataclasses.field(default_factory=list)    # additional checkpoint times in [0, T]
+    target_values: List[float] = dataclasses.field(default_factory=list)   # target mean value at each checkpoint time
+    target_weights: List[float] = dataclasses.field(default_factory=list)  # optional weights for checkpoint targets; defaults to gamma_target if omitted
 
     # graphon architecture
     enforce_symmetry: bool = False   # if True, enforce W_ij = W_ji exactly
@@ -92,6 +95,12 @@ class TrainConfig:
     hidden_score: int = 128
     time_scale: float = 1.0       # rescales t before feeding to score net
 
+    # loss weighting
+    weighted_running_cost: bool = False  # if True, linearly ramp running state cost weight from ~0 to 1 over [0, T]
+
+    # interaction scaling
+    interaction_alpha: float = -1.0     # linear interaction gain; negative compensates the current sign convention and guides toward consensus
+
     # reproducibility / device
     seed: int = 0
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -101,16 +110,24 @@ class TrainConfig:
 # Utility: interaction nonlinearity φ
 # ============================================================
 
-def phi_default(y: torch.Tensor) -> torch.Tensor:
+def phi_default(y: torch.Tensor, alpha: float = -1.0) -> torch.Tensor:
     """
-    Example interaction function φ(y).
-    You can replace this by:
-      - y
-      - torch.tanh(y)
-      - y / (1 + y.abs())
-      - etc.
+    Default linear interaction φ(y) = -y.
+
+    With the current rollout sign convention, the negative sign yields
+    consensus-seeking drift.
     """
-    return torch.tanh(y)
+    return alpha * torch.tanh(y)
+
+
+def phi_linear(y: torch.Tensor, alpha: float = -1.0) -> torch.Tensor:
+    """
+    Linear interaction φ(y) = alpha * y.
+
+    With the current rollout sign convention, alpha < 0 yields
+    consensus-seeking drift.
+    """
+    return alpha * y
 
 
 # ============================================================
@@ -340,6 +357,64 @@ def empirical_mean(x: torch.Tensor) -> torch.Tensor:
     return x.mean(dim=-1)
 
 
+def resolve_target_schedule(
+    T: float,
+    dt: float,
+    gamma_target: float,
+    target_times: List[float],
+    target_values: List[float],
+    target_weights: List[float],
+) -> List[Dict[str, float]]:
+    """
+    Resolve user-specified checkpoint targets onto the discrete simulation grid.
+
+    Each target time is mapped to the nearest rollout index via round(t / dt).
+    """
+    if len(target_times) != len(target_values):
+        raise ValueError(
+            "target_times and target_values must have the same length; "
+            f"got {len(target_times)} and {len(target_values)}"
+        )
+
+    if target_weights and len(target_weights) != len(target_times):
+        raise ValueError(
+            "target_weights must be empty or have the same length as target_times; "
+            f"got {len(target_weights)} and {len(target_times)}"
+        )
+
+    if not target_times:
+        return []
+
+    resolved_weights = target_weights
+    if not resolved_weights:
+        if gamma_target == 0.0:
+            raise ValueError(
+                "target_weights is empty and gamma_target is 0.0, so scheduled targets would carry no weight. "
+                "Set target_weights explicitly or use a nonzero gamma_target."
+            )
+        resolved_weights = [gamma_target] * len(target_times)
+
+    NT = int(round(T / dt))
+    schedule: List[Dict[str, float]] = []
+    for target_time, target_value, target_weight in zip(target_times, target_values, resolved_weights):
+        if target_time < 0.0 or target_time > T:
+            raise ValueError(f"target time {target_time} must lie in [0, T={T}]")
+
+        target_index = int(round(target_time / dt))
+        target_index = max(0, min(target_index, NT))
+        snapped_time = target_index * dt
+        schedule.append(
+            {
+                "index": float(target_index),
+                "time": snapped_time,
+                "value": float(target_value),
+                "weight": float(target_weight),
+            }
+        )
+
+    return schedule
+
+
 def graphon_l2_penalty(W: torch.Tensor) -> torch.Tensor:
     """
     Discrete approximation of ||w||^2_{L^2(I^2)} when W is a row-stochastic
@@ -391,8 +466,12 @@ def sampled_cost_JNdt(
     phi: Callable[[torch.Tensor], torch.Tensor],
     gamma_target: float = 0.0,
     x_target: float = 0.0,
+    target_times: Optional[List[float]] = None,
+    target_values: Optional[List[float]] = None,
+    target_weights: Optional[List[float]] = None,
     eta_uniform: float = 0.0,
     regularizer_mode: str = "l2",
+    weighted_running_cost: bool = False,
 ):
     """
     Monte Carlo sampled objective corresponding to Algorithm 1.
@@ -420,6 +499,16 @@ def sampled_cost_JNdt(
     running_state_cost:   torch.Tensor = torch.zeros((), device=device, dtype=dtype)
     running_l2_reg_cost: torch.Tensor = torch.zeros((), device=device, dtype=dtype)
     running_uniform_cost: torch.Tensor = torch.zeros((), device=device, dtype=dtype)
+    scheduled_target_cost: torch.Tensor = torch.zeros((), device=device, dtype=dtype)
+
+    resolved_schedule = resolve_target_schedule(
+        T=T,
+        dt=dt,
+        gamma_target=gamma_target,
+        target_times=target_times or [],
+        target_values=target_values or [],
+        target_weights=target_weights or [],
+    )
 
     NT = len(Ws)
     for n in range(NT):
@@ -430,7 +519,8 @@ def sampled_cost_JNdt(
         l2_reg_n      = graphon_l2_penalty(W_n)
         uniform_reg_n = graphon_uniform_penalty(W_n)
 
-        running_state_cost = running_state_cost + dt * var_n
+        w_n = (n + 1) * dt / T if weighted_running_cost else 1.0
+        running_state_cost = running_state_cost + dt * w_n * var_n
 
         if regularizer_mode == "l2":
             running_l2_reg_cost = running_l2_reg_cost + dt * (beta / 2.0) * l2_reg_n
@@ -446,17 +536,23 @@ def sampled_cost_JNdt(
     mean_T = empirical_mean(x_T)                   # (B,)
     target_tracking = ((mean_T - x_target) ** 2).mean()
 
+    for target_spec in resolved_schedule:
+        target_index = int(target_spec["index"])
+        mean_at_target = empirical_mean(xs[target_index])
+        scheduled_target_cost = scheduled_target_cost + target_spec["weight"] * ((mean_at_target - target_spec["value"]) ** 2).mean()
+
     terminal_var_cost = lambda_terminal * terminal_var
     terminal_target_cost = gamma_target * target_tracking
     terminal_cost = terminal_var_cost + terminal_target_cost
 
-    total = running_state_cost + running_l2_reg_cost + running_uniform_cost + terminal_cost
+    total = running_state_cost + running_l2_reg_cost + running_uniform_cost + terminal_cost + scheduled_target_cost
 
     aux = {
         "total_cost": float(total.detach().cpu()),
         "state_cost": float(running_state_cost.detach().cpu()),
         "l2_reg_cost": float(running_l2_reg_cost.detach().cpu()),
         "uniform_cost": float(running_uniform_cost.detach().cpu()),
+        "scheduled_target_cost": float(scheduled_target_cost.detach().cpu()),
         "terminal_var": float(terminal_var.detach().cpu()),
         "terminal_mean": float(mean_T.mean().detach().cpu()),
         "target_tracking": float(target_tracking.detach().cpu()),
@@ -577,6 +673,7 @@ def train_algorithm1_w1(
         "state_cost": [],
         "l2_reg_cost": [],
         "uniform_cost": [],
+        "scheduled_target_cost": [],
         "terminal_var": [],
         "terminal_cost": [],
         "terminal_mean": [],
@@ -605,8 +702,12 @@ def train_algorithm1_w1(
             phi=phi,
             gamma_target=config.gamma_target,
             x_target=config.x_target,
+            target_times=config.target_times,
+            target_values=config.target_values,
+            target_weights=config.target_weights,
             eta_uniform=config.eta_uniform,
             regularizer_mode=config.regularizer_mode,
+            weighted_running_cost=config.weighted_running_cost,
         )
 
         loss.backward()
@@ -620,6 +721,7 @@ def train_algorithm1_w1(
         history["state_cost"].append(aux["state_cost"])
         history["l2_reg_cost"].append(aux["l2_reg_cost"])
         history["uniform_cost"].append(aux["uniform_cost"])
+        history["scheduled_target_cost"].append(aux["scheduled_target_cost"])
         history["terminal_var"].append(aux["terminal_var"])
         history["terminal_cost"].append(aux["terminal_cost"])
         history["terminal_mean"].append(aux["terminal_mean"])
@@ -633,6 +735,7 @@ def train_algorithm1_w1(
             run=f"{aux['state_cost']:.4f}",
             term_var=f"{aux['terminal_var']:.4f}",
             term_mean=f"{aux['terminal_mean']:.4f}",
+            target=f"{aux['terminal_target_cost'] + aux['scheduled_target_cost']:.4f}",
             reg=f"{aux['l2_reg_cost'] + aux['uniform_cost']:.4f}",
         )
 
@@ -758,6 +861,7 @@ def run_experiment(
     print(f"  beta={config.beta}  eta_uniform={config.eta_uniform}  reg={config.regularizer_mode}")
     print(f"  batch={config.batch_size}  steps={config.num_steps}  lr={config.lr}")
     print(f"  lambda_terminal={config.lambda_terminal}  gamma_target={config.gamma_target}  x_target={config.x_target}")
+    print(f"  scheduled_targets={len(config.target_times)}")
     print(f"  phi={getattr(phi, '__name__', repr(phi))}")
     print(f"  x0_sampler={getattr(x0_sampler, '__name__', repr(x0_sampler))}")
     print(f"  tag={run_tag!r}")
@@ -810,6 +914,23 @@ def run_experiment(
         f"  term_var : {float(empirical_variance(xs[-1]).mean()):.6f}",
         "",
     ]
+    resolved_schedule = resolve_target_schedule(
+        T=config.T,
+        dt=config.dt,
+        gamma_target=config.gamma_target,
+        target_times=config.target_times,
+        target_values=config.target_values,
+        target_weights=config.target_weights,
+    )
+    if resolved_schedule:
+        eval_lines.append("--- Scheduled mean targets ---")
+        for target_spec in resolved_schedule:
+            target_index = int(target_spec["index"])
+            realized_mean = float(empirical_mean(xs[target_index]).mean())
+            eval_lines.append(
+                f"  t={target_spec['time']:.4f}  idx={target_index:4d}  target={target_spec['value']:+.6f}  realized_mean={realized_mean:+.6f}  weight={target_spec['weight']:.6f}"
+            )
+        eval_lines.append("")
     for label, idx in time_indices.items():
         W = Ws[idx].cpu()
         stats = heterogeneity_stats(W)
@@ -916,6 +1037,7 @@ def evaluate_policy(
 # ============================================================
 
 if __name__ == "__main__":
+    from functools import partial
 
     # Define the training configuration for the experiment.
     cfg = TrainConfig(
@@ -927,7 +1049,9 @@ if __name__ == "__main__":
 
         # target 
         x_target=5.0,           # target state for terminal mean-tracking cost
-
+        target_times=[5.0],   # user-specified target times for intermediate checkpoints (must lie in [0, T])
+        target_values=[-5.0], # corresponding target mean values at the specified target times
+        target_weights=[], # weights for the scheduled target costs; if empty, defaults to gamma_target for all targets
         # cost parameters
         lambda_terminal=1.0,   # terminal variance cost weight
         gamma_target=100.0,     # target state cost weight
@@ -935,6 +1059,12 @@ if __name__ == "__main__":
         eta_uniform=10.0,       # uniform cost weight
         beta=10.0,              # control regularization coefficient in J^{N,Δt}
         
+        # loss weighting
+        weighted_running_cost = False,  # if True, linearly ramp running state cost weight from ~0 to 1 over [0, T]
+
+        # interaction scaling
+        interaction_alpha=-1.0,   # linear interaction gain; negative gives consensus with the current sign convention
+
         # NN parameters
         num_steps=500,          # training steps
         batch_size=64,          # Monte Carlo samples per step
@@ -949,7 +1079,7 @@ if __name__ == "__main__":
     # Run the experiment with the specified configuration, interaction function, and initial state sampler.
     results = run_experiment(
         config=cfg,
-        phi=phi_default,
+        phi=partial(phi_linear, alpha=cfg.interaction_alpha),
         x0_sampler=sample_x0_linear_sine,
         out_root="out_1",
         run_tag=_random_run_tag(),
