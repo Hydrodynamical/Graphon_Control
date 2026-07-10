@@ -99,7 +99,7 @@ class TrainConfig:
     weighted_running_cost: bool = False  # if True, linearly ramp running state cost weight from ~0 to 1 over [0, T]
 
     # interaction scaling
-    interaction_alpha: float = -1.0     # linear interaction gain; negative compensates the current sign convention and guides toward consensus
+    interaction_alpha: float = 1.0      # linear interaction gain; positive is attractive (consensus-seeking) under the paper convention φ(x_j - x_i)
 
     # reproducibility / device
     seed: int = 0
@@ -110,22 +110,22 @@ class TrainConfig:
 # Utility: interaction nonlinearity φ
 # ============================================================
 
-def phi_default(y: torch.Tensor, alpha: float = -1.0) -> torch.Tensor:
+def phi_default(y: torch.Tensor, alpha: float = 1.0) -> torch.Tensor:
     """
-    Default linear interaction φ(y) = -y.
+    Default saturating interaction φ(y) = alpha * tanh(y).
 
-    With the current rollout sign convention, the negative sign yields
-    consensus-seeking drift.
+    The rollout evaluates φ at x_j - x_i (paper convention, eqn FN definition
+    in main4.tex), so alpha > 0 yields attractive, consensus-seeking drift.
     """
     return alpha * torch.tanh(y)
 
 
-def phi_linear(y: torch.Tensor, alpha: float = -1.0) -> torch.Tensor:
+def phi_linear(y: torch.Tensor, alpha: float = 1.0) -> torch.Tensor:
     """
     Linear interaction φ(y) = alpha * y.
 
-    With the current rollout sign convention, alpha < 0 yields
-    consensus-seeking drift.
+    The rollout evaluates φ at x_j - x_i (paper convention, eqn FN definition
+    in main4.tex), so alpha > 0 yields attractive, consensus-seeking drift.
     """
     return alpha * y
 
@@ -316,12 +316,9 @@ def rollout_dynamics_w1(
         W = model(t_n)  # (N, N)
         Ws.append(W)
 
-        # pairwise differences x_j - x_i, shape (B, N, N)
-        diff = x.unsqueeze(1) * 0.0  # dummy for shape hint
-        diff = x.unsqueeze(1)  # (B, 1, N)
+        # pairwise differences diff[b, i, j] = x_j - x_i, shape (B, N, N)
+        # (paper convention: drift_i = Σ_j W_ij φ(x_j - x_i))
         diff = x.unsqueeze(1).expand(B, N, N) - x.unsqueeze(2).expand(B, N, N)
-        # above is x_i - x_j, so flip sign:
-        diff = -diff  # now diff[b, i, j] = x_j - x_i
 
         interaction = phi(diff)                      # (B, N, N)
         drift = (W.unsqueeze(0) * interaction).sum(dim=-1)          # (B, N)
@@ -1045,7 +1042,7 @@ if __name__ == "__main__":
         N=32,                   # number of agents (discretization size for graphon)
         T=10.0,                  # total time horizon
         dt=0.02,                # time step for Euler-Maruyama simulation and cost discretization
-        sigma=0.50,             # noise scale in dynamics
+        sigma=0.0,             # noise scale in dynamics
 
         # target 
         x_target=5.0,           # target state for terminal mean-tracking cost
@@ -1063,7 +1060,7 @@ if __name__ == "__main__":
         weighted_running_cost = False,  # if True, linearly ramp running state cost weight from ~0 to 1 over [0, T]
 
         # interaction scaling
-        interaction_alpha=-1.0,   # linear interaction gain; negative gives consensus with the current sign convention
+        interaction_alpha=1.0,    # linear interaction gain; positive is attractive (consensus-seeking) under the paper convention φ(x_j - x_i)
 
         # NN parameters
         num_steps=500,          # training steps
