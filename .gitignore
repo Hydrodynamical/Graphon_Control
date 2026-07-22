@@ -211,3 +211,28 @@ __marimo__/
 # Project specific ignores
 out_1/*
 Images
+STYLE.md
+.DS_Store
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+*.synctex(busy)
+*.toc
+*.lof
+*.lot
+*.nav
+*.snm
+
+# Paper drafts and related materials (private — repo is public)
+*.tex
+*.pdf
+*.bib
+*.bib.bak*
+figures/
+references/

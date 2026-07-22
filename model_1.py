@@ -115,7 +115,7 @@ def phi_default(y: torch.Tensor, alpha: float = 1.0) -> torch.Tensor:
     Default saturating interaction φ(y) = alpha * tanh(y).
 
     The rollout evaluates φ at x_j - x_i (paper convention, eqn FN definition
-    in main4.tex), so alpha > 0 yields attractive, consensus-seeking drift.
+    in main5.tex), so alpha > 0 yields attractive, consensus-seeking drift.
     """
     return alpha * torch.tanh(y)
 
@@ -125,7 +125,7 @@ def phi_linear(y: torch.Tensor, alpha: float = 1.0) -> torch.Tensor:
     Linear interaction φ(y) = alpha * y.
 
     The rollout evaluates φ at x_j - x_i (paper convention, eqn FN definition
-    in main4.tex), so alpha > 0 yields attractive, consensus-seeking drift.
+    in main5.tex), so alpha > 0 yields attractive, consensus-seeking drift.
     """
     return alpha * y
 
@@ -182,7 +182,8 @@ class MLP(nn.Module):
 #
 # enforce_symmetry=False (directed):
 #   receiver h_i = φθ(ψ(ξ_i)),  sender h̃_j = φ̃θ(ψ(ξ_j))
-#   score s_ij(t) = gθ(t, h_i, h̃_j),  W = masked row-softmax
+#   score s_ij(t) = gθ(t, h_i, h̃_j),  W = row-softmax (self-loops permitted,
+#   matching the class U_N without the zero-diagonal constraint in main5.tex)
 #
 # enforce_symmetry=True (undirected):
 #   shared h_i = φθ(ψ(ξ_i))
@@ -204,7 +205,6 @@ class TimeLabelGraphonControl(nn.Module):
         super().__init__()
         self.xi: torch.Tensor
         self.psi_xi_cached: torch.Tensor
-        self.diag_mask: torch.Tensor
         self.register_buffer("xi", xi)          # (N,)
         self.N = xi.numel()
         self.time_scale = time_scale
@@ -226,10 +226,6 @@ class TimeLabelGraphonControl(nn.Module):
         # Precompute label features / embeddings at the fixed label grid
         psi_xi = self.ff(self.xi)                          # (N, 2m)
         self.register_buffer("psi_xi_cached", psi_xi)
-
-        # mask for self-interaction
-        mask = torch.eye(self.N, dtype=torch.bool, device=xi.device)
-        self.register_buffer("diag_mask", mask)
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
         """
@@ -258,7 +254,6 @@ class TimeLabelGraphonControl(nn.Module):
             A = 0.5 * (A + A.transpose(-1, -2))                 # exact symmetry
 
             W = torch.exp(A.clamp(max=20.0)) if self.positive_map == "exp" else F.softplus(A)
-            W = W.masked_fill(self.diag_mask.unsqueeze(0), 0.0)
 
             # Normalize by avg row sum — scalar per batch element, preserves symmetry
             avg_row_sum = W.sum(dim=-1).mean(dim=-1, keepdim=True).unsqueeze(-1).clamp_min(1e-8)
@@ -273,9 +268,7 @@ class TimeLabelGraphonControl(nn.Module):
             h_j = sender_h.view(1, 1, N, d).expand(B, N, N, d)
 
             scores = self.score_net(torch.cat([t_in, h_i, h_j], dim=-1)).squeeze(-1)  # (B, N, N)
-            scores = scores.masked_fill(self.diag_mask.unsqueeze(0), -1e9)
             W = F.softmax(scores, dim=-1)
-            W = W.masked_fill(self.diag_mask.unsqueeze(0), 0.0)
 
         if W.shape[0] == 1:
             return W[0]
@@ -427,19 +420,15 @@ def uniform_graphon_target(
     dtype: torch.dtype = torch.float32,
 ) -> torch.Tensor:
     """
-    Return the discrete uniform graphon compatible with the zero-diagonal,
-    row-stochastic architecture used here.
+    Return the discrete uniform graphon compatible with the row-stochastic
+    architecture used here (self-loops permitted; there is no zero-diagonal
+    constraint, matching the class U_N in main5.tex).
 
-    The learned W has W_ii = 0 and each row sums to 1, so the N off-diagonal
-    entries in each row share a total weight of 1.  The correct uniform target
-    is therefore U_ij = 1/(N-1) for i != j, U_ii = 0
-    — NOT the all-ones matrix, which would violate row normalization.
+    The learned W is row-stochastic, so the uniform target is U_ij = 1/N for
+    all entries — the row-stochastic representation of the constant graphon
+    w == 1 — NOT the all-ones matrix, which would violate row normalization.
     """
-    if N <= 1:
-        return torch.zeros(N, N, device=device, dtype=dtype)
-    U = torch.full((N, N), 1.0 / (N - 1), device=device, dtype=dtype)
-    U.fill_diagonal_(0.0)
-    return U
+    return torch.full((N, N), 1.0 / N, device=device, dtype=dtype)
 
 
 def graphon_uniform_penalty(W: torch.Tensor) -> torch.Tensor:

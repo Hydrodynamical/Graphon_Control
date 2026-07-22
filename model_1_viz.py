@@ -278,8 +278,7 @@ def heterogeneity_stats(W):
     k = max(1, int(0.05 * N))
     topk_mass = float(torch.topk(Wt, k=k, dim=1).values.sum(dim=1).mean().item())
 
-    uniform = torch.full_like(Wt, 1.0 / max(N - 1, 1))
-    uniform.fill_diagonal_(0.0)
+    uniform = torch.full_like(Wt, 1.0 / N)
     row_l2_dev = float(((Wt - uniform).pow(2).sum(dim=1).mean()).sqrt().item())
 
     return {

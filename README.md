@@ -196,3 +196,53 @@ for exp in experiments:
 | `frob_norm(W)` / `dist_frob(Wa, Wb)` | Frobenius norm and pairwise distance between graphons |
 | `sample_graphon_on_fine_grid(model, t, M)` | Evaluate a callable graphon on a fine M×M grid for smooth display |
 | `plot_state_histogram_over_time_imshow(xs)` | Density heatmap of the agent state distribution over time |
+
+---
+
+## Paper experiments (`e1_*.py`, `e2_bc.py`)
+
+Self-contained scripts reproducing the numerical section of the paper. Each
+trains a `TimeLabelGraphonControl` kernel against uncontrolled baselines,
+archives everything under `out_1/<run>/` (`config.json`, `metrics.json`,
+`trajectories.npz`, `model.pt`, `run_summary.txt`, GIFs), and mirrors
+paper-ready PDFs into `figures/`. All arms are always *evaluated and archived*;
+the *figures* show mean-field vs trained control (the paper's two-arm design).
+
+### Setup
+
+```bash
+python3 -m venv .venv312 && .venv312/bin/pip install torch numpy matplotlib tqdm pillow
+```
+
+(Any Python ≥ 3.10 works; CPU is sufficient — the paper runs took 15–90 min
+each on a laptop. `--device mps` / `--device cuda` are available.)
+
+### Reproducing the paper runs
+
+```bash
+# Bounded confidence (subsec:exp-bc): fragmentation vs trained prevention
+.venv312/bin/python e2_bc.py --tag eps1_T10                    # ~30 min
+.venv312/bin/python e2_bc.py --uncontrolled-only --tag tune    # <1 min: baselines only
+.venv312/bin/python e2_bc.py --smoke                           # ~2 min: plumbing test
+
+# Kuramoto untwisting (subsec:exp-kuramoto)
+.venv312/bin/python e1_kuramoto.py --k 3 --T 20 --steps 3000 --tag k3_T20   # headline, ~75 min
+.venv312/bin/python e1_kuramoto.py --k 2 --T 12 --sigma 0.3 --tag k2_T12_sig03  # noisy robustness
+.venv312/bin/python e1_noise_figure.py --noisy k2_T12_sig03 --noiseless k2_T12  # noise panel
+# (the sigma=0 reference run: .venv312/bin/python e1_kuramoto.py --k 2 --T 12 --tag k2_T12)
+
+# Collect the paper's figures into the flat folder figures/paper/
+./collect_paper_figures.sh
+```
+
+Useful knobs for slide-making: `--k` (twist depth), `--T` (horizon), `--sigma`
+(Brownian noise; adds a 32-path ensemble evaluation), `--seed`, `--steps`;
+for `e2_bc.py` also `--eps` (confidence radius), `--gain`, `--span`, `--beta`
+(the paper uses `beta=1` here — at the Kuramoto default `beta=10` the
+controller merges clusters only partially), and `--phi-form {poly,gauss}`.
+Every run writes `untwist.gif`/`opinions.gif` and `kernel_time.gif` — often
+the best slide material. Do not run more than two trainings concurrently on a
+laptop (thread oversubscription; see `OMP_NUM_THREADS`).
+
+`e1_msweep.py` is the datum-resolution sweep (value convergence in the
+coarse-datum parameter M); it is archived here but no longer part of the paper.
