@@ -4,7 +4,7 @@
 
 A PyTorch research implementation that learns how agents influence one another over time. It combines neural interaction kernels, differentiable simulation, and stochastic optimization.
 
-Companion code for *Graphon Controlled Opinion Dynamics*, by **Joseph K. Miller and Brandon Su**.
+Companion code for *Optimal Graphon Control of Collective Dynamics*, by **Joseph K. Miller and Brandon Su**.
 
 ## Experiments
 
@@ -26,22 +26,23 @@ From the repository root:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install torch numpy matplotlib tqdm pillow
+python -m pip install -e .
 python e1_kuramoto.py --smoke --device cpu --no-mirror
 ```
 
-This runs a 20-iteration workflow check. Results appear under `out_1/`, including `untwist.gif`, `kernel_time.gif`, and `metrics.json`.
+This runs a 20-iteration workflow check on a small grid and network. Results appear under `out_1/`, including `untwist.gif`, `kernel_time.gif`, and `metrics.json`.
 
 ## Code
 
 | File | Contents |
 | --- | --- |
-| `model_1.py` | Neural controller, simulation, and training |
+| `graphon_control/` | Reusable controller, dynamics, objectives, and training |
+| `model_1.py` | General experiment entry point |
 | `e1_kuramoto.py` | Oscillator experiment |
 | `e2_bc.py` | Opinion dynamics experiment |
 | `model_1_viz.py` | Visualization utilities |
 
-Use `python <script> --help` for experiment options.
+Use `python <script> --help` for experiment options. See [development](docs/DEVELOPMENT.md) for testing and reproduction, and [numerical conventions](docs/NUMERICS.md) for the connection to the paper.
 
 ## Research scope
 
