@@ -1,5 +1,6 @@
 """Model-specific figures, loaded only when rendering archived runs."""
 import math
+from collections.abc import Mapping
 from typing import Dict, List
 import numpy as np
 import torch
@@ -54,6 +55,64 @@ def fig_r_combined(t_grid, r_series, k: int, path: str, arms: List[str] = None):
     fig.tight_layout()
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
+
+
+def fig_rw_panel(t_grid, r_series: Dict[str, np.ndarray],
+                 winding_series: Dict[str, np.ndarray], k: int, path: str):
+    """Plot archived order parameters and winding numbers without a rollout.
+
+    Both mappings must contain mean-field and trained curves and the same arms.
+    Every supplied arm is shown; the optional ring baseline retains its style.
+    """
+    if isinstance(k, bool) or not isinstance(k, (int, np.integer)) or k < 1:
+        raise ValueError("k must be a positive integer")
+    t_grid = np.asarray(t_grid, dtype=float)
+    if (t_grid.ndim != 1 or len(t_grid) < 2 or not np.isfinite(t_grid).all()
+            or not np.all(np.diff(t_grid) > 0)):
+        raise ValueError("t_grid must be a finite, strictly increasing vector")
+    if not isinstance(r_series, Mapping) or not isinstance(winding_series, Mapping):
+        raise ValueError("r_series and winding_series must be arm mappings")
+    if set(r_series) != set(winding_series):
+        raise ValueError("Order-parameter and winding mappings must contain the same arms")
+    if not set(PAPER_ARMS).issubset(r_series):
+        raise ValueError("Both meanfield and trained arms are required")
+    unknown = set(r_series) - set(ARM_LABELS)
+    if unknown:
+        raise ValueError(f"Unknown arms: {sorted(unknown)}")
+    arms = [arm for arm in ARM_LABELS if arm in r_series]
+    curves = []
+    for name, series in (("r", r_series), ("winding", winding_series)):
+        values = {}
+        for arm in arms:
+            value = np.asarray(series[arm], dtype=float)
+            if value.shape != t_grid.shape or not np.isfinite(value).all():
+                raise ValueError(f"Invalid {name} curve for {arm}: expected finite values matching t_grid")
+            if name == "r" and np.any((value < -1e-6) | (value > 1 + 1e-6)):
+                raise ValueError(f"Order parameter for {arm} must lie in [0, 1]")
+            values[arm] = value
+        curves.append(values)
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 3.8))
+    try:
+        for ax, series in zip(axes, curves):
+            for arm in arms:
+                ax.plot(t_grid, series[arm], color=ARM_COLORS[arm], lw=2.0,
+                        label=ARM_LABELS[arm])
+            ax.set_xlabel(r"$t$")
+            ax.grid(alpha=0.2)
+        axes[0].set_ylabel(r"order parameter $r(t)$")
+        axes[0].set_ylim(-0.03, 1.03)
+        for q in range(k + 1):
+            axes[1].axhline(q, color="0.85", lw=0.8, zorder=0)
+        axes[1].set_ylabel(r"winding number $\mathcal{W}(t)$")
+        axes[1].set_ylim(min(-0.25, min(v.min() for v in curves[1].values()) - 0.05),
+                         max(k + 0.25, max(v.max() for v in curves[1].values()) + 0.05))
+        axes[0].legend(loc="upper left", fontsize=9)
+        fig.suptitle(rf"Untwisting the $k = {k}$ twisted state ($T = {t_grid[-1]:g}$)", y=1.02)
+        fig.tight_layout()
+        fig.savefig(path, bbox_inches="tight")
+    finally:
+        plt.close(fig)
 
 
 def fig_winding(t_grid, wind_series: Dict[str, np.ndarray], k: int, path: str,

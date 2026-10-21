@@ -236,3 +236,9 @@ STYLE.md
 *.bib.bak*
 figures/
 references/
+
+# Original appendix input archives are supplied separately.
+/data/appendix/
+
+# Saved-array exports are generated, never source inputs.
+/out/
