@@ -1,0 +1,61 @@
+{
+  "k": 2,
+  "costs": {
+    "meanfield": {
+      "total": 277.8751220703125,
+      "state_cost": 157.87513732910156,
+      "l2_reg_cost": 120.0,
+      "terminal_var": 13.15626049041748,
+      "terminal_target": 5.551115123125783e-15,
+      "terminal_mean": 7.450580596923828e-09
+    },
+    "ring": {
+      "total": 967.452392578125,
+      "state_cost": 157.87513732910156,
+      "l2_reg_cost": 809.5772705078125,
+      "terminal_var": 13.15626049041748,
+      "terminal_target": 5.551115123125783e-15,
+      "terminal_mean": 7.450580596923828e-09
+    },
+    "trained": {
+      "total": 190.85398864746094,
+      "state_cost": 31.176782608032227,
+      "l2_reg_cost": 159.62045288085938,
+      "terminal_var": 8.732880814932287e-06,
+      "terminal_target": 0.05675093084573746,
+      "terminal_mean": -0.02382245473563671
+    }
+  },
+  "r_initial": 2.8638169169425964e-08,
+  "r_final": {
+    "meanfield": 2.8638169169425964e-08,
+    "ring": 2.8638169169425964e-08,
+    "trained": 0.9999955892562866
+  },
+  "var_final": {
+    "meanfield": 13.15626049041748,
+    "ring": 13.15626049041748,
+    "trained": 8.732880814932287e-06
+  },
+  "winding_final": {
+    "meanfield": 2.0,
+    "ring": 2.0,
+    "trained": -7.589098771632052e-08
+  },
+  "terminal_mean_trained": -0.02382245473563671,
+  "vxi": {
+    "trained_max": 14.46484088897705,
+    "trained_final": 0.5247852206230164,
+    "ring": 43.59681701660156,
+    "meanfield": 0.0
+  },
+  "value_gap_meanfield_minus_trained": 87.02113342285156,
+  "noisy_eval": {
+    "sigma": 0.3,
+    "n_replicates": 32,
+    "r_final_mean": 0.9742251634597778,
+    "r_final_q10": 0.9684785008430481,
+    "r_final_q90": 0.9789402484893799,
+    "winding_final_mean": -8.300576226361045e-09
+  }
+}

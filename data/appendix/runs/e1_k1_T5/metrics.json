@@ -1,0 +1,48 @@
+{
+  "k": 1,
+  "costs": {
+    "meanfield": {
+      "total": 66.44532775878906,
+      "state_cost": 16.44532585144043,
+      "l2_reg_cost": 50.0,
+      "terminal_var": 3.28906512260437,
+      "terminal_target": 1.3877787807814457e-15,
+      "terminal_mean": 3.725290298461914e-09
+    },
+    "ring": {
+      "total": 353.7691955566406,
+      "state_cost": 16.44532585144043,
+      "l2_reg_cost": 337.3238830566406,
+      "terminal_var": 3.28906512260437,
+      "terminal_target": 1.3877787807814457e-15,
+      "terminal_mean": 3.725290298461914e-09
+    },
+    "trained": {
+      "total": 57.51552963256836,
+      "state_cost": 5.354661464691162,
+      "l2_reg_cost": 52.1602668762207,
+      "terminal_var": 0.010279948823153973,
+      "terminal_target": 0.0006043039611540735,
+      "terminal_mean": -0.0024582594633102417
+    }
+  },
+  "r_initial": 2.6371218098120153e-08,
+  "r_final": {
+    "meanfield": 2.6371218098120153e-08,
+    "ring": 2.6371218098120153e-08,
+    "trained": 0.9948722720146179
+  },
+  "var_final": {
+    "meanfield": 3.28906512260437,
+    "ring": 3.28906512260437,
+    "trained": 0.010279948823153973
+  },
+  "terminal_mean_trained": -0.0024582594633102417,
+  "vxi": {
+    "trained_max": 3.740018129348755,
+    "trained_final": 0.06472654640674591,
+    "ring": 43.59681701660156,
+    "meanfield": 0.0
+  },
+  "value_gap_meanfield_minus_trained": 8.929798126220703
+}

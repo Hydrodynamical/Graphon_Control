@@ -1,0 +1,70 @@
+{
+  "eps": 1.0,
+  "gain": 4.0,
+  "span": 6.0,
+  "beta": 1.0,
+  "costs": {
+    "meanfield": {
+      "total": 38.07704544067383,
+      "state_cost": 28.077045440673828,
+      "l2_reg_cost": 10.0,
+      "terminal_var": 2.8000376224517822,
+      "terminal_target": 1.6792123247455493e-13,
+      "terminal_mean": -4.0978193283081055e-08
+    },
+    "band": {
+      "total": 98.60784912109375,
+      "state_cost": 27.191635131835938,
+      "l2_reg_cost": 71.41621398925781,
+      "terminal_var": 2.7036962509155273,
+      "terminal_target": 2.220446049250313e-14,
+      "terminal_mean": -1.4901161193847656e-08
+    },
+    "trained": {
+      "total": 17.929262161254883,
+      "state_cost": 4.267096519470215,
+      "l2_reg_cost": 13.661956787109375,
+      "terminal_var": 5.283037136253677e-20,
+      "terminal_target": 0.00020805203530471772,
+      "terminal_mean": -0.001442400855012238
+    }
+  },
+  "var_final": {
+    "meanfield": 2.8000376224517822,
+    "band": 2.7036962509155273,
+    "trained": 5.283037136253677e-20
+  },
+  "K_final": {
+    "meanfield": 4,
+    "band": 4,
+    "trained": 1
+  },
+  "clusters_meanfield_T": [
+    {
+      "center": -2.2444586753845215,
+      "mass": 0.25
+    },
+    {
+      "center": -0.7499877214431763,
+      "mass": 0.25
+    },
+    {
+      "center": 0.7499878406524658,
+      "mass": 0.25
+    },
+    {
+      "center": 2.2444581985473633,
+      "mass": 0.25
+    }
+  ],
+  "freeze_time_meanfield": 1.85,
+  "vxi": {
+    "band": 43.284034729003906,
+    "meanfield": 0.0,
+    "trained_max": 46.334083557128906,
+    "trained_final": 1.622012972831726
+  },
+  "consensus_time_trained": 4.0,
+  "terminal_mean_trained": -0.001442400855012238,
+  "value_gap_meanfield_minus_trained": 20.147783279418945
+}

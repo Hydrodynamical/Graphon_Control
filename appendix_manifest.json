@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "description": "Original runs for the existing Miller\u2013Su numerical appendix. Historical inputs retained unchanged; no retraining.",
+  "runs": {
+    "bc": {
+      "path": "data/appendix/runs/e2_eps1_T10",
+      "sha256": {
+        "config.json": "d1ca4cb1465da0066238d5aad0f6a8db19db384930861453fc69b4dac952ed3c",
+        "metrics.json": "5eb0369d0221b785a7ad2df440651030e663cc0c74b602f1bcb6ebaf403dd4b7",
+        "trajectories.npz": "994ee45d108fa67ca96859322fe1839ecc326693fffa93d7f02645f071d28f9a"
+      }
+    },
+    "k1": {
+      "path": "data/appendix/runs/e1_k1_T5",
+      "sha256": {
+        "config.json": "18fe4364db0476d7456f309a0f633c0b537431aa0f3f5207c117f8238ce2013f",
+        "metrics.json": "b42fcc26c74ab045557b2cefb5e9c3aa8b41ba06735208f7dcdd746d04a01bc6",
+        "trajectories.npz": "f91fa4e9bd80514d2f5f1a4ca2d4b947af0bff483a1600611987b6199d7b04a7"
+      }
+    },
+    "k2": {
+      "path": "data/appendix/runs/e1_k2_T12",
+      "sha256": {
+        "config.json": "8fc0b04e36aca41d50332ed1344f4093650ffd148185a1e612ca73b311759731",
+        "metrics.json": "5787be6e8cf28f4bc39997318705abf71424fdc92578b0e7a4e07cd3d3e70b44",
+        "trajectories.npz": "d982c7da096d611948220f7ee22e8caede394f7a63b9b91b3e4a6c47e2602032"
+      }
+    },
+    "k3": {
+      "path": "data/appendix/runs/e1_k3_T20",
+      "sha256": {
+        "config.json": "4a13f2ec59bd6b06e03dc6027b9a9c1d99f1ff8f27d58a100f6d66f85553c0c6",
+        "metrics.json": "78e161f2bbef70e20100b145eee8fae1e34051542a37ca5057b24d0d883fec63",
+        "trajectories.npz": "d599a52abc17b22ead159bd527096afedc081b5286ff9e2c661de59be97ed15b"
+      }
+    },
+    "noise": {
+      "path": "data/appendix/runs/e1_k2_T12_sig03",
+      "sha256": {
+        "config.json": "0e3e703619b9876159949ebdf13a389a570400c11d26e580a48e25a9d214e77c",
+        "metrics.json": "31212452d9d34e9bba01b772aecf8e1e6eef2cc464c0133f1254fa8644fadf2d",
+        "trajectories.npz": "58c6322f096cbd34c240a25119efb2b0b76368c502801bae986dff625dd0f9b7"
+      }
+    }
+  },
+  "output_dir": "out/appendix-reference",
+  "figures": {
+    "bc_opinion_traj.pdf": "data/appendix/reference_figures/bc_opinion_traj.pdf",
+    "bc_kernel_strip.pdf": "data/appendix/reference_figures/bc_kernel_strip.pdf",
+    "kur_rw_panel.pdf": "data/appendix/reference_figures/kur_rw_panel.pdf",
+    "kur_kernel_strip.pdf": "data/appendix/reference_figures/kur_kernel_strip.pdf",
+    "kur_noise_panel.pdf": "data/appendix/reference_figures/kur_noise_panel.pdf"
+  },
+  "figures_sha256": {
+    "bc_opinion_traj.pdf": "13fea9efb675fe284756047ecfe6b40d14d0c7bb5efd537ca944c0599253c253",
+    "bc_kernel_strip.pdf": "ae25938cb270330ab7a12264432c168c66c2d97f9e07ec9c758a6350d7d2e139",
+    "kur_rw_panel.pdf": "8fbd92e2bed0ac2524c648999752e915a760ad3ab9e86d0ccd624dd6219d47b3",
+    "kur_kernel_strip.pdf": "75e93c47be3df16626003550ec8eaf8d1957d6f2041d751281edb91c6f9160ae",
+    "kur_noise_panel.pdf": "54db656b1fd1c2f48fd8367a0b63af6f25a66c276af53b4c13b2ce57d82b86ea"
+  }
+}

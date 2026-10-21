@@ -32,6 +32,16 @@ python e1_kuramoto.py --smoke --device cpu --no-mirror
 
 This runs a 20-iteration workflow check on a small grid and network. Results appear under `out_1/`, including `untwist.gif`, `kernel_time.gif`, and `metrics.json`.
 
+## Reproduce the appendix
+
+Regenerate the existing appendix figures and table statistics from the bundled original results, without training or simulation:
+
+```bash
+python reproduce_appendix.py --manifest appendix_manifest.json --output out/appendix-regenerated
+```
+
+See [appendix reproduction](docs/APPENDIX_REPRODUCTION.md) for the archived runs, verification checks, and noise-data limitation.
+
 ## Code
 
 | File | Contents |
