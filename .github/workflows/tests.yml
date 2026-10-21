@@ -1,0 +1,23 @@
+name: Numerical checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    env:
+      MPLBACKEND: Agg
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+      - run: python -m pip install -r requirements-tested.txt
+      - run: python -m pip install --no-deps -e .
+      - run: python -m pytest
+      - run: python e1_kuramoto.py --smoke --no-plots --no-mirror --out-root smoke-results
+      - run: python e2_bc.py --smoke --no-plots --no-mirror --out-root smoke-results
