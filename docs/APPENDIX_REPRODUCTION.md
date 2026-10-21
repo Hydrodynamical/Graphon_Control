@@ -1,8 +1,6 @@
 # Reproducing the existing numerical appendix
 
-The original saved results are supplied separately; this PR contains no archived
-run arrays or reference PDFs. Put the selected original inputs under
-`data/appendix/` (about 17 MB), following the manifest paths below.
+The original saved results are bundled in `data/appendix/` (about 17 MB).
 `appendix_manifest.json` selects the five runs and historical figures by path
 and SHA-256. Reproduction uses saved arrays only: no training, checkpoint
 loading, or integration of the dynamics.
@@ -15,12 +13,10 @@ loading, or integration of the dynamics.
 | `k3` | `e1_k3_T20` | headline Kuramoto table and two figures, k=3 |
 | `noise` | `e1_k2_T12_sig03` | noisy Kuramoto ensemble panel |
 
-For each run, copy its unchanged `config.json`, `metrics.json`, and
-`trajectories.npz` into `data/appendix/runs/<original-run>/`. Copy the five
-matching historical figure PDFs into `data/appendix/reference_figures/`. Checkpoints and training histories are unnecessary for
-this workflow and are omitted. Only the five numerical figure PDFs are needed; manuscript sources are not
-inputs. `appendix_manifest.json` records every required hash; missing or changed
-run inputs are refused before any export. The archive directory is ignored by Git.
+Each run includes its unchanged `config.json`, `metrics.json`, and
+`trajectories.npz`. Checkpoints and training histories are unnecessary for
+this workflow and are omitted. The reference folder contains only the five
+numerical figure PDFs; manuscript sources are not included.
 
 All runs record N=64, dt=0.05, seed 0 and training jitter 0.1. Deterministic
 evaluations use the exact initial profiles stated in the appendix. BC and the
@@ -48,9 +44,8 @@ writes five figure PDFs plus:
 
 Diagnostics and objectives are recomputed by arithmetic on archived state and
 kernel arrays. Small differences from stored metrics arise when float64
-reductions replace the original float32 reductions. When the original inputs are available, the real-data regression test also
-compares the other rounded table entries. It skips when no archive is present;
-fixture tests run without archived data. Existing output
+reductions replace the original float32 reductions. The tests also compare the
+other rounded table entries with the bundled results. Existing output
 directories are refused; choose a new name for another export. Generated
 outputs under `out/` are ignored by Git.
 
@@ -61,7 +56,7 @@ outputs under `out/` are ignored by Git.
 ```
 
 This copies the selected historical PDFs into `out/appendix-reference/`.
-The selected historical reference PDFs match the manuscript assets byte-for-byte. The original
+The reference PDFs match the manuscript assets byte-for-byte. The original
 BC run's kernel PDF differed from its figure mirror only in one creation-date
 byte; the bundle retains the matching mirror. Regenerated figures match the
 reference renders at 100 dpi in the tested environment. PDF creation dates and

@@ -34,7 +34,7 @@ This runs a 20-iteration workflow check on a small grid and network. Results app
 
 ## Reproduce the appendix
 
-Regenerate the existing appendix figures and table statistics from the original results (supplied separately), without training or simulation:
+Regenerate the existing appendix figures and table statistics from the bundled original results, without training or simulation:
 
 ```bash
 python reproduce_appendix.py --manifest appendix_manifest.json --output out/appendix-regenerated

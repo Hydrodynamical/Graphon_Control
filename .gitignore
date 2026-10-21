@@ -237,8 +237,8 @@ STYLE.md
 figures/
 references/
 
-# Original appendix input archives are supplied separately.
-/data/appendix/
+# Curated appendix reproduction inputs; other paper PDFs stay ignored.
+!/data/appendix/reference_figures/*.pdf
 
 # Saved-array exports are generated, never source inputs.
 /out/

@@ -130,8 +130,6 @@ def test_saved_array_export_preserves_inputs_and_lists_all_outputs(archived_fixt
 def test_bundled_original_results_match_appendix():
     """Verify the published statistics against the actual archived inputs."""
     root = Path(__file__).resolve().parents[1]
-    if not (root / "data/appendix").exists():
-        pytest.skip("Original appendix inputs are supplied separately")
     manifest_path = root / "appendix_manifest.json"
     runs, _ = exporter.load_manifest(manifest_path)
     results = {name: exporter.diagnostics(name, run) for name, run in runs.items()}
