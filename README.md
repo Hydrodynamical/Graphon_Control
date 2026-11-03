@@ -4,7 +4,9 @@
 
 A PyTorch research implementation that learns how agents influence one another over time. It combines neural interaction kernels, differentiable simulation, and stochastic optimization.
 
-Companion code for *Optimal Graphon Control of Collective Dynamics*, by **Joseph K. Miller and Brandon Su**.
+Companion code for [*Optimal Graphon Control of Collective Dynamics*](https://arxiv.org/abs/2610.31975), by **Joseph K. Miller and Brandon Su**.
+
+[Paper](https://arxiv.org/abs/2610.31975) · [Experiments](#experiments) · [Figure reproduction](docs/APPENDIX_REPRODUCTION.md)
 
 ## Experiments
 
